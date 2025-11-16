@@ -1,19 +1,34 @@
-export type Device = {
-  id: string;
+// devices.ts
+import { apiGet, apiPost, apiDelete } from "./client";
+
+export type Deviceinfo = {
   name: string;
-  ip: string;
-  status: "online" | "offline";
-  uptime: string;
+  description?: string;
+  location?: string;
 };
 
-export async function getDeviceList(): Promise<Device[]> {
-  return new Promise((resolve) => {
-    setTimeout(() => {
-      resolve([
-        { id: "1", name: "GL-AR750", ip: "192.168.8.1", status: "online", uptime: "5h 21m" },
-        { id: "2", name: "TPLink MR3020", ip: "192.168.0.1", status: "offline", uptime: "-" },
-        { id: "3", name: "MT300N V2", ip: "192.168.1.1", status: "online", uptime: "12h 09m" }
-      ]);
-    }, 500);
-  });
+export type Device = {
+  id?: string;
+  name: string;
+  description?: string;
+  location?: string;
+  ip?: string;
+  status?: string;
+};
+
+export async function createDeviceApi(d: Deviceinfo) {
+  return apiPost("/api/device/create", d);
 }
+
+export async function deleteDeviceApi(name: string) {
+  return apiDelete(`/api/device/${encodeURIComponent(name)}/delete`);
+}
+
+export async function getDeviceByNameApi(name: string): Promise<Device> {
+  return apiGet(`/api/device/${encodeURIComponent(name)}/get`);
+}
+
+export async function getAllDevicesApi(): Promise<Device[]> {
+  return apiGet("/api/device/get");
+}
+

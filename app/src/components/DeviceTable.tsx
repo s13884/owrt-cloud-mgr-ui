@@ -6,16 +6,17 @@ export default function DeviceTable({ devices }: { devices: Device[] }) {
       <thead className="bg-gray-100">
         <tr>
           <th className="p-2 border">Name</th>
-          <th className="p-2 border">IP</th>
-          <th className="p-2 border">Status</th>
+          <th className="p-2 border">Description</th>
+          <th className="p-2 border">Location</th>
           <th className="p-2 border">Uptime</th>
         </tr>
       </thead>
       <tbody>
         {devices.map((d) => (
-          <tr key={d.id}>
+          <tr key={d.name}>
             <td className="p-2 border">{d.name}</td>
-            <td className="p-2 border">{d.ip}</td>
+            <td className="p-2 border">{d.description}</td>
+            <td className="p-2 border">{d.location}</td>
             <td className="p-2 border">
               {d.status === "online" ? (
                 <span className="text-green-600">Online</span>
