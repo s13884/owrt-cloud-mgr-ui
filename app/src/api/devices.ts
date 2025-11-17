@@ -12,7 +12,7 @@ export type Device = {
   name: string;
   description?: string;
   location?: string;
-  ip?: string;
+  uptime?: string;
   status?: string;
 };
 
@@ -30,5 +30,15 @@ export async function getDeviceByNameApi(name: string): Promise<Device> {
 
 export async function getAllDevicesApi(): Promise<Device[]> {
   return apiGet("/api/device/get");
+}
+
+export async function createDeviceConfigApi(deviceName: string, config: any) {
+  // backend endpoint for creating/storing config version
+  return apiPost(`/api/device/${encodeURIComponent(deviceName)}/config/create`, config);
+}
+
+export async function getPortalProfilesApi() {
+  // optional: fetch list of portal profiles from backend (for future cloud portal)
+  return apiGet("/api/portal/profiles");
 }
 
