@@ -121,7 +121,7 @@ export default function AddDeviceConfigModal({
       // `initialConfig` could be:
       // A) normalized: { hostname, timezone, tz_offset, ntp_servers, logs, interfaces: [{config, section, type, values}], raw: {...} }
       // B) raw Option-C: { system: [...], wireless: [...], network: [...], firewall: [...], chilli: [...] }
-      const normalized = typeof initialConfig.hostname === "string" || !!initialConfig.interfaces;
+      const normalized = initialConfig && (typeof initialConfig.hostname === "string" || Array.isArray(initialConfig.interfaces));
       let raw: any = null;
 
       if (normalized) {
@@ -152,47 +152,86 @@ export default function AddDeviceConfigModal({
           setLogProto("udp");
         }
 
-        // interfaces: prefer normalized.interfaces if present (each item may already be {config, section, type, values})
+        // interfaces: prefer normalized.interfaces if present (supports both UCI-style { values: {...} } and already-normalized flat objects)
         if (Array.isArray(n.interfaces) && n.interfaces.length) {
           const parsed = n.interfaces.map((it: any, idx: number) => {
-            // it might already be {config, section, type, values}
-            const vals = it.values || {};
-            const net = vals.network;
-            let networkMode: NetworkMode = "lan";
-            if (net?.startsWith("guest")) networkMode = "guest";
-            else if (net?.startsWith("hs")) networkMode = "hotspot";
-            else if (net?.startsWith("corp")) networkMode = "corp";
+            // Support two shapes:
+            // 1) UCI-style: { config, section, type, values: { device, ssid, network, ... } }
+            // 2) Normalized flat: { id, device, ssid, authMode, networkMode, uamServer, ... }
+            const vals = it.values || it || {};
+            const section = it.section || it.id || genIfaceId(idx);
 
+            // network detection: prefer explicit networkMode or network field
+            const explicitNetworkMode = it.networkMode;
+            const net = vals.network || it.network;
+            let networkMode: NetworkMode = "lan";
+            if (explicitNetworkMode) {
+              networkMode = explicitNetworkMode as NetworkMode;
+            } else if (typeof net === "string") {
+              if (net.startsWith("guest")) networkMode = "guest";
+              else if (net.startsWith("hs")) networkMode = "hotspot";
+              else if (net.startsWith("corp")) networkMode = "corp";
+            }
+
+            // authMode detection: prefer explicit authMode, otherwise infer from vals
             let authMode: AuthMode = "wpa-personal";
-            if (vals.encryption === "none") authMode = "hotspot";
-            else if (vals.ieee8021x === "1") authMode = "wpa-enterprise";
+            if (it.authMode) {
+              authMode = it.authMode as AuthMode;
+            } else {
+              if (vals.encryption === "none") authMode = "hotspot";
+              else if (vals.ieee8021x === "1") authMode = "wpa-enterprise";
+            }
+
+            // Build interface using values found either under values or top-level keys
+            const device = vals.device || it.device || "radio0";
+            const ssid = vals.ssid || it.ssid || "";
+            const encryption = vals.encryption || it.encryption;
+            const key = vals.key || it.key;
+            const maxassoc = vals.maxassoc || it.maxassoc;
+
+            // WPA Enterprise fields
+            const radiusServer = vals.auth_server || vals.radiusServer || it.radiusServer || it.auth_server;
+            const radiusPort = vals.auth_port || vals.radiusPort || it.radiusPort || it.auth_port;
+            const radiusSecret = vals.auth_secret || vals.radiusSecret || it.radiusSecret || it.auth_secret;
+
+            // Hotspot / Chilli fields
+            const uamServer = vals.uamserver || it.uamServer || it.uamserver;
+            const radiusServerHotspot = vals.radiusserver1 || it.radiusServerHotspot || it.radiusserver1;
+            const radiusPortHotspot = vals.radiusport1 || it.radiusPortHotspot || it.radiusport1;
+            const radiusSecretHotspot = vals.radiussecret || it.radiusSecretHotspot || it.radiussecret;
+            const uamAllowed = vals.uamallowed || it.uamAllowed || it.uamallowed;
+            const nasId = vals.nasid || it.nasId || it.nasid;
 
             return {
-              id: it.section || genIfaceId(idx),
-              device: vals.device || "radio0",
-              ssid: vals.ssid || "",
+              id: section,
+              device,
+              ssid,
               authMode,
               networkMode,
-              encryption: vals.encryption,
-              key: vals.key,
-              maxassoc: vals.maxassoc,
-              radiusServer: vals.auth_server,
-              radiusPort: vals.auth_port,
-              radiusSecret: vals.auth_secret,
-              uamServer: vals.uamserver,
-              radiusServerHotspot: vals.radiusserver1,
-              radiusPortHotspot: vals.radiusport1,
-              radiusSecretHotspot: vals.radiussecret,
-              uamAllowed: vals.uamallowed,
-              nasId: vals.nasid,
+              encryption,
+              key,
+              maxassoc,
+              // enterprise
+              radiusServer,
+              radiusPort,
+              radiusSecret,
+              // hotspot
+              uamServer,
+              radiusServerHotspot,
+              radiusPortHotspot,
+              radiusSecretHotspot,
+              uamAllowed,
+              nasId,
             } as WifiInterface;
           });
+
           setInterfaces(parsed);
           setIfaceCounter(parsed.length || 1);
         } else if (n.raw) {
           // fallback to raw inside normalized
           raw = n.raw;
         }
+
       } else {
         // raw option-c
         raw = initialConfig;
@@ -718,6 +757,14 @@ export default function AddDeviceConfigModal({
                       <input className="border p-2 rounded w-full" placeholder="Walled garden"
                         value={iface.uamAllowed}
                         onChange={(e)=>updateIface(iface.id,{uamAllowed:e.target.value})}
+                      />
+                      <input
+                        className="border p-2 rounded w-full"
+                        placeholder="NAS ID"
+                        value={iface.nasId || ""}          // <-- ensures it loads the backend value
+                        onChange={(e) =>
+                          updateIface(iface.id, { nasId: e.target.value })
+                        }
                       />
                     </div>
                   )}
